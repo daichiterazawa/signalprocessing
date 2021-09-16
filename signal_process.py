@@ -67,28 +67,48 @@ def noise(SNR,N):
 
 #64QAM
 def decQAM_64(signal_AWGN):
-    list_Q = []
-    list_I = []
-    num_real = signal_AWGN.real
-    num_imag = signal_AWGN.imag
+    #デコードしたビットを格納する配列
+    decQAM_64 = np.zeros(6 * signal_AWGN.size, dtype = int)
     
     #実数成分の閾値処理
+    num_real = signal_AWGN.real
     num_real = (num_real // 2) *2 +1
     num_real[np.where(num_real > 7)] = 7
     num_real[np.where(num_real < -7)] = -7
+    #虚数成分の閾値処理
+    num_imag = signal_AWGN.imag
+    num_imag = (num_imag // 2) *2 +1
+    num_imag[np.where(num_imag > 7)] = 7
+    num_imag[np.where(num_imag < -7)] = -7
     
+    #シンボル->ビット
+    #第1象限のみに縮小
+    num_real = (num_real+7)/2
+    num_imag = (num_imag+7)/2
+    #10進数を2進数に
+    decQAM_64[5::6],num_imag = divmod(num_imag,4)
+    decQAM_64[4::6],num_real = divmod(num_real,4)
+    decQAM_64[3::6],num_imag = divmod(num_imag,2)
+    decQAM_64[2::6],num_real = divmod(num_real,2)
+    decQAM_64[1::6] = num_imag
+    decQAM_64[0::6] = num_real
     
-    
+    #グレイ符号のため（下位ビット）=（中位ビット）^（下位ビット)
+    decQAM_64[0::6] ^= decQAM_64[2::6]
+    decQAM_64[1::6] ^= decQAM_64[3::6]
+    #グレイ符号のため（中位ビット）=（上位ビット）^（中位ビット)
+    decQAM_64[2::6] ^= decQAM_64[4::6]
+    decQAM_64[3::6] ^= decQAM_64[5::6]
+           
+    return decQAM_64
         
-    return format(num_real,'b')
-        
         
     
     
-
-a = modQAM_64(prbs(L))
-b = noise(10,a.size) + a
-c = decQAM_64(b)
+aa = prbs(L)
+a = modQAM_64(aa)
+b = noise(20,a.size) + a
+c= decQAM_64(b)
 
 
 fig = plt.figure(figsize = (10,10))
