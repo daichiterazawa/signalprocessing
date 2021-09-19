@@ -60,15 +60,36 @@ def modQAM_64(prbs):
     return QAM_64
 
 ###################################################
+    
+################### アップサンプリング ##################
+def upsampling(symbols):
+    ana_symbols = np.zeros(2 * symbols.size, dtype="complex")
+    ana_symbols[0::2] = symbols
+    return ana_symbols
+###################################################
 
+################### 矩形ナイキストフィルタ ##############
+def nyquist_filter(symbols):
+    fft_symbols = np.fft.fft(symbols)
+    nyquist = np.zeros(fft_symbols.size)
+    nyquist[fft_symbols.size//4:fft_symbols.size//4 *3] = 1
+    seikei = np.fft.ifft(nyquist * fft_symbols)
+    return seikei
+    
 ###################　雑音の付与　#####################
     
 def noise(SNRdB,N,QAM_order):
     SNR = 1/QAM_order *10**(0.1 * SNRdB)
-    noise =  np.random.normal(0, np.sqrt(1/(2*SNR)), N) + 1j*np.random.normal(0, np.sqrt(1/(2*SNR)), N)
+    noise =  np.random.normal(0, np.sqrt(1/(SNR)), N) + 1j*np.random.normal(0, np.sqrt(1/(SNR)), N)
     return noise
     
 ###################################################    
+
+################### ダウンサンプリング ##################
+def downsampling(symbols):
+    deg_symbols = np.zeros(int(symbols.size/2))
+    deg_symbols = symbols[0::2]
+    return deg_symbols
 
 ################### 信号の復調 #####################
 #QPSA
@@ -173,22 +194,43 @@ if __name__ == '__main__':
     mod_QAM16 = modQAM_16(prbs_QAM16)
     mod_QAM64 = modQAM_64(prbs_QAM64) 
     
+    #アップサンプリング
+    up_QPSK = upsampling(mod_QPSK)
+    up_QAM16 = upsampling(mod_QAM16)
+    up_QAM64 = upsampling(mod_QAM64)
+    
+    #矩形フィルタ
+    filterd_QPSK = nyquist_filter(up_QPSK)
+    filterd_QAM16 = nyquist_filter(up_QAM16)
+    filterd_QAM64 = nyquist_filter(up_QAM64)
+    
+    
     #リスト作成
-    SNR_list = np.arange(0,30,1)
+    SNR_list = np.arange(15,35,1)
     BER_QPSK_list = []
     BER_16QAM_list = []
     BER_64QAM_list = []
     
     for SNR in SNR_list:
         #雑音付与
-        noise_QPSK = mod_QPSK + noise(SNR, mod_QPSK.size, 2*10)
-        noise_QAM16 = mod_QAM16 + noise(SNR, mod_QAM16.size, 4*10)
-        noise_QAM64 = mod_QAM64 + noise(SNR, mod_QAM64.size,6*10)
+        noise_QPSK = filterd_QPSK + noise(SNR, filterd_QPSK.size, 2*10)
+        noise_QAM16 = filterd_QAM16 + noise(SNR, filterd_QAM16.size, 4*10)
+        noise_QAM64 = filterd_QAM64 + noise(SNR, filterd_QAM64.size,6*10)
         
+         #フィルタ
+        filterd_noise_QPSK = 2 * nyquist_filter(noise_QPSK)
+        filterd_noise_QAM16 = 2 * nyquist_filter(noise_QAM16)
+        filterd_noise_QAM64 = 2 * nyquist_filter(noise_QAM64)
+        
+        #ダウンサンプリング
+        down_QPSK = downsampling(filterd_noise_QPSK)
+        down_QAM16 = downsampling(filterd_noise_QAM16)
+        down_QAM64 = downsampling(filterd_noise_QAM64)
+               
         #デコード
-        dec_QPSK = decQPSK(noise_QPSK)
-        dec_QAM16 = decQAM_16(noise_QAM16)
-        dec_QAM64 = decQAM_64(noise_QAM64)
+        dec_QPSK = decQPSK(down_QPSK)
+        dec_QAM16 = decQAM_16(down_QAM16)
+        dec_QAM64 = decQAM_64(down_QAM64)
         
         BER_QPSK = np.sum(prbs_QPSK^dec_QPSK)/prbs_QPSK.size
         BER_QAM16 = np.sum(prbs_QAM16^dec_QAM16)/prbs_QAM16.size
@@ -205,8 +247,3 @@ if __name__ == '__main__':
     plt.yscale('log')
     plt.ylim([10**(-5),1])
     fig.savefig("img.png")
-        
-        
-
-
-
